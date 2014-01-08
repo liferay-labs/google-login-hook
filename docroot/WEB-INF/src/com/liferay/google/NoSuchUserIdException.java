@@ -14,7 +14,7 @@
 
 package com.liferay.google;
 
-import com.liferay.portal.PortalException;
+import com.liferay.portal.kernel.exception.PortalException;
 
 /**
  * @author Sergio González
