@@ -25,12 +25,15 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.oauth2.Oauth2;
 import com.google.api.services.oauth2.model.Userinfo;
+
+import com.liferay.portal.kernel.exception.SystemException;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
 import com.liferay.portal.kernel.util.CalendarFactoryUtil;
 import com.liferay.portal.kernel.util.Constants;
 import com.liferay.portal.kernel.util.LocaleUtil;
 import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.PrefsPropsUtil;
 import com.liferay.portal.kernel.util.StringPool;
 import com.liferay.portal.kernel.util.StringUtil;
 import com.liferay.portal.kernel.util.Validator;
@@ -46,19 +49,22 @@ import com.liferay.portal.util.PortalUtil;
 import com.liferay.portal.util.PortletKeys;
 import com.liferay.portlet.PortletURLFactoryUtil;
 
-import javax.portlet.PortletMode;
-import javax.portlet.PortletRequest;
-import javax.portlet.PortletURL;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+
+import javax.portlet.PortletMode;
+import javax.portlet.PortletRequest;
+import javax.portlet.PortletURL;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 /**
  * @author Sergio González
@@ -77,7 +83,8 @@ public class GoogleOAuth extends BaseStrutsAction {
 		String redirectUri = PortalUtil.getPortalURL(request) + _REDIRECT_URI;
 
 		if (cmd.equals("login")) {
-			GoogleAuthorizationCodeFlow flow = getFlow();
+			GoogleAuthorizationCodeFlow flow = getFlow(
+				themeDisplay.getCompanyId());
 
 			GoogleAuthorizationCodeRequestUrl
 				googleAuthorizationCodeRequestUrl = flow.newAuthorizationUrl();
@@ -94,7 +101,8 @@ public class GoogleOAuth extends BaseStrutsAction {
 			String code = ParamUtil.getString(request, "code");
 
 			if (Validator.isNotNull(code)) {
-				Credential credential = exchangeCode(code, redirectUri);
+				Credential credential = exchangeCode(
+					themeDisplay.getCompanyId(), code, redirectUri);
 
 				Userinfo userinfo = getUserInfo(credential);
 
@@ -158,8 +166,8 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 		User user = UserLocalServiceUtil.addUser(
 			creatorUserId, companyId, autoPassword, password1, password2,
-			autoScreenName, screenName, emailAddress, 0, openId,
-			locale, firstName, middleName, lastName, prefixId, suffixId, male,
+			autoScreenName, screenName, emailAddress, 0, openId, locale,
+			firstName, middleName, lastName, prefixId, suffixId, male,
 			birthdayMonth, birthdayDay, birthdayYear, jobTitle, groupIds,
 			organizationIds, roleIds, userGroupIds, sendEmail, serviceContext);
 
@@ -178,11 +186,11 @@ public class GoogleOAuth extends BaseStrutsAction {
 	}
 
 	protected Credential exchangeCode(
-			String authorizationCode, String redirectUri)
-		throws CodeExchangeException {
+			long companyId, String authorizationCode, String redirectUri)
+		throws CodeExchangeException, SystemException {
 
 		try {
-			GoogleAuthorizationCodeFlow flow = getFlow();
+			GoogleAuthorizationCodeFlow flow = getFlow(companyId);
 
 			GoogleAuthorizationCodeTokenRequest token = flow.newTokenRequest(
 				authorizationCode);
@@ -200,19 +208,36 @@ public class GoogleOAuth extends BaseStrutsAction {
 		}
 	}
 
-	protected GoogleAuthorizationCodeFlow getFlow() throws IOException {
+	protected GoogleAuthorizationCodeFlow getFlow(long companyId)
+		throws IOException, SystemException {
+
 		HttpTransport httpTransport = new NetHttpTransport();
 		JacksonFactory jsonFactory = new JacksonFactory();
 
-		InputStream is = GoogleOAuth.class.getResourceAsStream(
-			_CLIENT_SECRETS_LOCATION);
+		GoogleAuthorizationCodeFlow.Builder builder = null;
 
-		GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
-			jsonFactory, new InputStreamReader(is));
+		String googleClientId = PrefsPropsUtil.getString(
+			companyId, "google.client.id");
+		String googleClientSecret = PrefsPropsUtil.getString(
+			companyId, "google.client.secret");
 
-		GoogleAuthorizationCodeFlow.Builder builder =
-			new GoogleAuthorizationCodeFlow.Builder(
-					httpTransport, jsonFactory, clientSecrets, _SCOPES);
+		if (Validator.isNull(googleClientId) ||
+			Validator.isNull(googleClientSecret)) {
+
+			InputStream is = GoogleOAuth.class.getResourceAsStream(
+				_CLIENT_SECRETS_LOCATION);
+
+			GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
+				jsonFactory, new InputStreamReader(is));
+
+			builder = new GoogleAuthorizationCodeFlow.Builder(
+				httpTransport, jsonFactory, clientSecrets, _SCOPES);
+		}
+		else {
+			builder = new GoogleAuthorizationCodeFlow.Builder(
+				httpTransport, jsonFactory, googleClientId, googleClientSecret,
+				_SCOPES);
+		}
 
 		builder.setAccessType("online");
 		builder.setApprovalPrompt("force");
@@ -244,7 +269,6 @@ public class GoogleOAuth extends BaseStrutsAction {
 			throw new NoSuchUserIdException();
 		}
 	}
-
 
 	protected void redirectUpdateAccount(
 			HttpServletRequest request, HttpServletResponse response, User user)
@@ -300,8 +324,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 			if ((user != null) &&
 				(user.getStatus() != WorkflowConstants.STATUS_INCOMPLETE)) {
 
-				session.setAttribute(
-					"GOOGLE_USER_EMAIL_ADDRESS", emailAddress);
+				session.setAttribute("GOOGLE_USER_EMAIL_ADDRESS", emailAddress);
 			}
 		}
 
@@ -326,9 +349,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 		return user;
 	}
 
-	protected User updateUser(User user, Userinfo userinfo)
-		throws Exception {
-
+	protected User updateUser(User user, Userinfo userinfo) throws Exception {
 		String emailAddress = userinfo.getEmail();
 		String firstName = userinfo.getGivenName();
 		String lastName = userinfo.getFamilyName();
@@ -372,9 +393,9 @@ public class GoogleOAuth extends BaseStrutsAction {
 			user.getUserId(), StringPool.BLANK, StringPool.BLANK,
 			StringPool.BLANK, false, user.getReminderQueryQuestion(),
 			user.getReminderQueryAnswer(), user.getScreenName(), emailAddress,
-			0, user.getOpenId(), user.getLanguageId(),
-			user.getTimeZoneId(), user.getGreeting(), user.getComments(),
-			firstName, user.getMiddleName(), lastName, contact.getPrefixId(),
+			0, user.getOpenId(), user.getLanguageId(), user.getTimeZoneId(),
+			user.getGreeting(), user.getComments(), firstName,
+			user.getMiddleName(), lastName, contact.getPrefixId(),
 			contact.getSuffixId(), male, birthdayMonth, birthdayDay,
 			birthdayYear, contact.getSmsSn(), contact.getAimSn(),
 			contact.getFacebookSn(), contact.getIcqSn(), contact.getJabberSn(),
