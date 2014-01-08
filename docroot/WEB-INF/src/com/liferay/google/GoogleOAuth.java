@@ -75,6 +75,12 @@ import javax.servlet.http.HttpSession;
  */
 public class GoogleOAuth extends BaseStrutsAction {
 
+	public static final String GOOGLE_ACCESS_TOKEN = "googleAccessToken";
+
+	public static final String GOOGLE_REFRESH_TOKEN = "googleRefreshToken";
+
+	public static final String GOOGLE_USER_ID = "googleUserId";
+
 	public String execute(
 			HttpServletRequest request, HttpServletResponse response)
 		throws Exception {
@@ -375,18 +381,18 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 		ExpandoValueLocalServiceUtil.addValue(
 			user.getCompanyId(), User.class.getName(),
-			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleUserId",
-			user.getUserId(), userinfo.getId());
-
-		ExpandoValueLocalServiceUtil.addValue(
-			user.getCompanyId(), User.class.getName(),
-			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleAccessToken",
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, GOOGLE_ACCESS_TOKEN,
 			user.getUserId(), accessToken);
 
 		ExpandoValueLocalServiceUtil.addValue(
 			user.getCompanyId(), User.class.getName(),
-			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleRefreshToken",
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, GOOGLE_REFRESH_TOKEN,
 			user.getUserId(), refreshToken);
+
+		ExpandoValueLocalServiceUtil.addValue(
+			user.getCompanyId(), User.class.getName(),
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, GOOGLE_USER_ID,
+			user.getUserId(), userinfo.getId());
 	}
 
 	protected User updateUser(User user, Userinfo userinfo) throws Exception {
@@ -445,18 +451,20 @@ public class GoogleOAuth extends BaseStrutsAction {
 			serviceContext);
 	}
 
-	private final String _CLIENT_SECRETS_LOCATION = "client_secrets.json";
+	private static final String _CLIENT_SECRETS_LOCATION =
+		"client_secrets.json";
 
-	private final String _GOOGLE_DRIVE_CONTEXT = "google-drive-hook";
+	private static final String _GOOGLE_DRIVE_CONTEXT = "google-drive-hook";
 
-	private final String _REDIRECT_URI = "/c/portal/google_login?cmd=token";
+	private static final String _REDIRECT_URI =
+		"/c/portal/google_login?cmd=token";
 
-	private final List<String> _SCOPES_DRIVE = Arrays.asList(
+	private static final List<String> _SCOPES_DRIVE = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile",
 		"https://www.googleapis.com/auth/drive");
 
-	private final List<String> _SCOPES_LOGIN = Arrays.asList(
+	private static final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
 
