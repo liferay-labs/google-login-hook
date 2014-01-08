@@ -26,6 +26,8 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.oauth2.Oauth2;
 import com.google.api.services.oauth2.model.Userinfo;
 
+import com.liferay.portal.kernel.deploy.DeployManagerUtil;
+import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
@@ -48,6 +50,8 @@ import com.liferay.portal.theme.ThemeDisplay;
 import com.liferay.portal.util.PortalUtil;
 import com.liferay.portal.util.PortletKeys;
 import com.liferay.portlet.PortletURLFactoryUtil;
+import com.liferay.portlet.expando.model.ExpandoTableConstants;
+import com.liferay.portlet.expando.service.ExpandoValueLocalServiceUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -104,10 +108,8 @@ public class GoogleOAuth extends BaseStrutsAction {
 				Credential credential = exchangeCode(
 					themeDisplay.getCompanyId(), code, redirectUri);
 
-				Userinfo userinfo = getUserInfo(credential);
-
 				User user = setGoogleCredentials(
-					session, themeDisplay.getCompanyId(), userinfo);
+					session, themeDisplay.getCompanyId(), credential);
 
 				if ((user != null) &&
 					(user.getStatus() == WorkflowConstants.STATUS_INCOMPLETE)) {
@@ -221,6 +223,15 @@ public class GoogleOAuth extends BaseStrutsAction {
 		String googleClientSecret = PrefsPropsUtil.getString(
 			companyId, "google.client.secret");
 
+		List<String> scopes = null;
+
+		if (DeployManagerUtil.isDeployed(_GOOGLE_DRIVE_CONTEXT)) {
+			scopes = _SCOPES_DRIVE;
+		}
+		else {
+			scopes = _SCOPES_LOGIN;
+		}
+
 		if (Validator.isNull(googleClientId) ||
 			Validator.isNull(googleClientSecret)) {
 
@@ -231,12 +242,12 @@ public class GoogleOAuth extends BaseStrutsAction {
 				jsonFactory, new InputStreamReader(is));
 
 			builder = new GoogleAuthorizationCodeFlow.Builder(
-				httpTransport, jsonFactory, clientSecrets, _SCOPES);
+				httpTransport, jsonFactory, clientSecrets, scopes);
 		}
 		else {
 			builder = new GoogleAuthorizationCodeFlow.Builder(
 				httpTransport, jsonFactory, googleClientId, googleClientSecret,
-				_SCOPES);
+				scopes);
 		}
 
 		builder.setAccessType("online");
@@ -306,8 +317,10 @@ public class GoogleOAuth extends BaseStrutsAction {
 	}
 
 	protected User setGoogleCredentials(
-			HttpSession session, long companyId, Userinfo userinfo)
+			HttpSession session, long companyId, Credential credential)
 		throws Exception {
+
+		Userinfo userinfo = getUserInfo(credential);
 
 		if (userinfo == null) {
 			return null;
@@ -346,7 +359,34 @@ public class GoogleOAuth extends BaseStrutsAction {
 			user = addUser(session, companyId, userinfo);
 		}
 
+		if (DeployManagerUtil.isDeployed(_GOOGLE_DRIVE_CONTEXT)) {
+			updateCustomFields(
+				user, userinfo, credential.getAccessToken(),
+				credential.getRefreshToken());
+		}
+
 		return user;
+	}
+
+	protected void updateCustomFields(
+			User user, Userinfo userinfo, String accessToken,
+			String refreshToken)
+		throws PortalException, SystemException {
+
+		ExpandoValueLocalServiceUtil.addValue(
+			user.getCompanyId(), User.class.getName(),
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleUserId",
+			user.getUserId(), userinfo.getId());
+
+		ExpandoValueLocalServiceUtil.addValue(
+			user.getCompanyId(), User.class.getName(),
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleAccessToken",
+			user.getUserId(), accessToken);
+
+		ExpandoValueLocalServiceUtil.addValue(
+			user.getCompanyId(), User.class.getName(),
+			ExpandoTableConstants.DEFAULT_TABLE_NAME, "googleRefreshToken",
+			user.getUserId(), refreshToken);
 	}
 
 	protected User updateUser(User user, Userinfo userinfo) throws Exception {
@@ -407,9 +447,16 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 	private final String _CLIENT_SECRETS_LOCATION = "client_secrets.json";
 
+	private final String _GOOGLE_DRIVE_CONTEXT = "google-drive-hook";
+
 	private final String _REDIRECT_URI = "/c/portal/google_login?cmd=token";
 
-	private final List<String> _SCOPES = Arrays.asList(
+	private final List<String> _SCOPES_DRIVE = Arrays.asList(
+		"https://www.googleapis.com/auth/userinfo.email",
+		"https://www.googleapis.com/auth/userinfo.profile",
+		"https://www.googleapis.com/auth/drive");
+
+	private final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
 
