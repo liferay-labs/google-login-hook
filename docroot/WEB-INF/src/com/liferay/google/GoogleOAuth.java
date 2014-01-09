@@ -256,7 +256,13 @@ public class GoogleOAuth extends BaseStrutsAction {
 				scopes);
 		}
 
-		builder.setAccessType("online");
+		String accessType = "online";
+
+		if (DeployManagerUtil.isDeployed(_GOOGLE_DRIVE_CONTEXT)) {
+			accessType = "offline";
+		}
+
+		builder.setAccessType(accessType);
 		builder.setApprovalPrompt("force");
 
 		return builder.build();
