@@ -125,16 +125,17 @@ public class GoogleOAuth extends BaseStrutsAction {
 					return null;
 				}
 
-				PortletURL portletURL = PortletURLFactoryUtil.create(
-					request, PortletKeys.FAST_LOGIN, themeDisplay.getPlid(),
-					PortletRequest.RENDER_PHASE);
+				sendLoginRedirect(request, response);
 
-				portletURL.setWindowState(LiferayWindowState.POP_UP);
+				return null;
+			}
 
-				portletURL.setParameter(
-					"struts_action", "/login/login_redirect");
+			String error = ParamUtil.getString(request, "error");
 
-				response.sendRedirect(portletURL.toString());
+			if (error.equals("access_denied")) {
+				sendLoginRedirect(request, response);
+
+				return null;
 			}
 		}
 
@@ -324,6 +325,24 @@ public class GoogleOAuth extends BaseStrutsAction {
 		portletURL.setParameter("lastName", user.getLastName());
 		portletURL.setPortletMode(PortletMode.VIEW);
 		portletURL.setWindowState(LiferayWindowState.POP_UP);
+
+		response.sendRedirect(portletURL.toString());
+	}
+
+	protected void sendLoginRedirect(
+			HttpServletRequest request, HttpServletResponse response)
+		throws Exception {
+
+		ThemeDisplay themeDisplay = (ThemeDisplay)request.getAttribute(
+			WebKeys.THEME_DISPLAY);
+
+		PortletURL portletURL = PortletURLFactoryUtil.create(
+			request, PortletKeys.FAST_LOGIN, themeDisplay.getPlid(),
+			PortletRequest.RENDER_PHASE);
+
+		portletURL.setWindowState(LiferayWindowState.POP_UP);
+
+		portletURL.setParameter("struts_action", "/login/login_redirect");
 
 		response.sendRedirect(portletURL.toString());
 	}
