@@ -43,8 +43,6 @@ import com.google.api.services.oauth2.model.Userinfo;
 import com.liferay.portal.kernel.deploy.DeployManagerUtil;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
-import com.liferay.portal.kernel.log.Log;
-import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
 import com.liferay.portal.kernel.util.CalendarFactoryUtil;
@@ -60,6 +58,7 @@ import com.liferay.portal.kernel.workflow.WorkflowConstants;
 import com.liferay.portal.model.Contact;
 import com.liferay.portal.model.User;
 import com.liferay.portal.model.UserGroupRole;
+import com.liferay.portal.service.GroupLocalServiceUtil;
 import com.liferay.portal.service.ServiceContext;
 import com.liferay.portal.service.UserLocalServiceUtil;
 import com.liferay.portal.theme.ThemeDisplay;
@@ -199,7 +198,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 	protected Credential exchangeCode(
 			long companyId, long scopeGroupId, String authorizationCode, String redirectUri)
-		throws CodeExchangeException, SystemException {
+		throws SystemException, PortalException {
 
 		try {
 			GoogleAuthorizationCodeFlow flow = getFlow(companyId, scopeGroupId);
@@ -221,18 +220,13 @@ public class GoogleOAuth extends BaseStrutsAction {
 	}
 
 	protected GoogleAuthorizationCodeFlow getFlow(long companyId, long scopeGroupId)
-		throws IOException, SystemException {
+		throws IOException, SystemException, PortalException {
 
 		HttpTransport httpTransport = new NetHttpTransport();
 		JacksonFactory jsonFactory = new JacksonFactory();
 
 		GoogleAuthorizationCodeFlow.Builder builder = null;
-
-		String googleClientId = PrefsPropsUtil.getString(
-			companyId, "google.client.id");
-		String googleClientSecret = PrefsPropsUtil.getString(
-			companyId, "google.client.secret");
-
+		
 		List<String> scopes = null;
 
 		if (DeployManagerUtil.isDeployed(_GOOGLE_DRIVE_CONTEXT)) {
@@ -242,6 +236,27 @@ public class GoogleOAuth extends BaseStrutsAction {
 			scopes = _SCOPES_LOGIN;
 		}
 
+		// Try to get Google Client ID and Client Secret for current Site settings
+		
+		String googleClientId = (String)GroupLocalServiceUtil.getGroup(scopeGroupId)
+				.getExpandoBridge().getAttribute(GOOGLE_SITE_CLIENT_ID, false);
+		String googleClientSecret = (String)GroupLocalServiceUtil.getGroup(scopeGroupId)
+				.getExpandoBridge().getAttribute(GOOGLE_SITE_CLIENT_SECRET, false);
+		
+		// If they are not set, then try to get it from Portal settings
+		
+		if (Validator.isNull(googleClientId) ||
+			Validator.isNull(googleClientSecret)) {
+			
+			googleClientId = PrefsPropsUtil.getString(
+				companyId, "google.client.id");
+			googleClientSecret = PrefsPropsUtil.getString(
+				companyId, "google.client.secret");
+		}
+
+		// If they are not set both for Site and Portal settings, then
+		// read it from client_secrets.json
+		
 		if (Validator.isNull(googleClientId) ||
 			Validator.isNull(googleClientSecret)) {
 
@@ -495,7 +510,5 @@ public class GoogleOAuth extends BaseStrutsAction {
 	private static final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
-	
-    private static Log _log = LogFactoryUtil.getLog(GoogleOAuth.class);
 
 }
