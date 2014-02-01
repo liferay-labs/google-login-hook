@@ -22,7 +22,7 @@
 <h3><liferay-ui:message key="google-login-settings" /></h3>
 
 <%
-	String googleLoginJSONCode = PrefsPropsUtil.getString(company.getCompanyId(), "google-login-json-code");
+	/* String googleLoginJSONCode = PrefsPropsUtil.getString(company.getCompanyId(), "googleLoginJsonCode"); */
 	Group liveGroup = (Group)request.getAttribute("site.liveGroup");
 %>
 
@@ -31,5 +31,5 @@
 	classPK="<%= liveGroup.getGroupId() %>"
 	editable="true"
 	label="true"
-	name="google-login-json-code"
+	name="googleLoginJsonCode"
 />
