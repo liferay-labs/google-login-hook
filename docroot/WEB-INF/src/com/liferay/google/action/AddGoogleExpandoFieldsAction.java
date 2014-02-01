@@ -99,7 +99,6 @@ public class AddGoogleExpandoFieldsAction extends SimpleAction {
 		
 		properties = new UnicodeProperties();
 
-		properties.setProperty("hidden", "true");
 		properties.setProperty("visible-with-update-permission", "false");
 		properties.setProperty("height", "105");
 		properties.setProperty("width", "450");
