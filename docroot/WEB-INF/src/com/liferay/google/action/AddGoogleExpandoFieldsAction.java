@@ -21,7 +21,9 @@ import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.util.UnicodeProperties;
+import com.liferay.portal.model.Group;
 import com.liferay.portal.model.User;
+import com.liferay.portlet.expando.DuplicateTableNameException;
 import com.liferay.portlet.expando.model.ExpandoColumn;
 import com.liferay.portlet.expando.model.ExpandoColumnConstants;
 import com.liferay.portlet.expando.model.ExpandoTable;
@@ -55,17 +57,19 @@ public class AddGoogleExpandoFieldsAction extends SimpleAction {
 			return;
 		}
 
-		ExpandoColumn googleRefreshToken =
+		ExpandoColumn expandoColumn =
 			ExpandoColumnLocalServiceUtil.addColumn(
 				tableId, name, ExpandoColumnConstants.STRING);
 
 		ExpandoColumnLocalServiceUtil.updateTypeSettings(
-			googleRefreshToken.getColumnId(), properties.toString());
+			expandoColumn.getColumnId(), properties.toString());
 	}
 
 	protected void doRun(long companyId) throws Exception {
 		ExpandoTable expandoTable = null;
 
+		// Add expando fields for storing User personal tokens
+		
 		try {
 			expandoTable = ExpandoTableLocalServiceUtil.addTable(
 				companyId, User.class.getName(),
@@ -90,6 +94,26 @@ public class AddGoogleExpandoFieldsAction extends SimpleAction {
 			properties);
 		addColumn(
 			expandoTable.getTableId(), GoogleOAuth.GOOGLE_USER_ID, properties);
+		
+		// Add expando field for storing site-specific google login OAuth json token
+		
+		expandoTable = null;
+		
+		try {
+			expandoTable = ExpandoTableLocalServiceUtil.addTable(
+				companyId, Group.class.getName(),
+				ExpandoTableConstants.DEFAULT_TABLE_NAME);
+		} catch (DuplicateTableNameException ex) {
+			expandoTable = ExpandoTableLocalServiceUtil.getTable(
+				companyId, Group.class.getName(),
+				ExpandoTableConstants.DEFAULT_TABLE_NAME);
+		}
+		
+		addColumn(
+				expandoTable.getTableId(), GoogleOAuth.GOOGLE_LOGIN_JSON_CODE,
+				properties);
+		
+		
 	}
 
 }
