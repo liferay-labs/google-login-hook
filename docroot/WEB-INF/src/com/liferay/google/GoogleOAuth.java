@@ -43,6 +43,8 @@ import com.google.api.services.oauth2.model.Userinfo;
 import com.liferay.portal.kernel.deploy.DeployManagerUtil;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
 import com.liferay.portal.kernel.util.CalendarFactoryUtil;
@@ -78,7 +80,9 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 	public static final String GOOGLE_USER_ID = "googleUserId";
 	
-	public static final String GOOGLE_LOGIN_JSON_CODE = "googleLoginJsonCode";
+	public static final String GOOGLE_SITE_CLIENT_ID = "googleSiteClientId";
+	
+	public static final String GOOGLE_SITE_CLIENT_SECRET = "googleSiteClientSecret";
 
 	public String execute(
 			HttpServletRequest request, HttpServletResponse response)
@@ -93,7 +97,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 		if (cmd.equals("login")) {
 			GoogleAuthorizationCodeFlow flow = getFlow(
-				themeDisplay.getCompanyId());
+				themeDisplay.getCompanyId(), themeDisplay.getScopeGroupId());
 
 			GoogleAuthorizationCodeRequestUrl
 				googleAuthorizationCodeRequestUrl = flow.newAuthorizationUrl();
@@ -111,7 +115,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 			if (Validator.isNotNull(code)) {
 				Credential credential = exchangeCode(
-					themeDisplay.getCompanyId(), code, redirectUri);
+					themeDisplay.getCompanyId(), themeDisplay.getScopeGroupId(), code, redirectUri);
 
 				User user = setGoogleCredentials(
 					session, themeDisplay.getCompanyId(), credential);
@@ -194,11 +198,11 @@ public class GoogleOAuth extends BaseStrutsAction {
 	}
 
 	protected Credential exchangeCode(
-			long companyId, String authorizationCode, String redirectUri)
+			long companyId, long scopeGroupId, String authorizationCode, String redirectUri)
 		throws CodeExchangeException, SystemException {
 
 		try {
-			GoogleAuthorizationCodeFlow flow = getFlow(companyId);
+			GoogleAuthorizationCodeFlow flow = getFlow(companyId, scopeGroupId);
 
 			GoogleAuthorizationCodeTokenRequest token = flow.newTokenRequest(
 				authorizationCode);
@@ -216,7 +220,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 		}
 	}
 
-	protected GoogleAuthorizationCodeFlow getFlow(long companyId)
+	protected GoogleAuthorizationCodeFlow getFlow(long companyId, long scopeGroupId)
 		throws IOException, SystemException {
 
 		HttpTransport httpTransport = new NetHttpTransport();
@@ -491,5 +495,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 	private static final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
+	
+    private static Log _log = LogFactoryUtil.getLog(GoogleOAuth.class);
 
 }

@@ -31,5 +31,13 @@
 	classPK="<%= liveGroup.getGroupId() %>"
 	editable="true"
 	label="true"
-	name="googleLoginJsonCode"
+	name="googleSiteClientId"
+/>
+
+<liferay-ui:custom-attribute
+	className="<%= Group.class.getName() %>"
+	classPK="<%= liveGroup.getGroupId() %>"
+	editable="true"
+	label="true"
+	name="googleSiteClientSecret"
 />

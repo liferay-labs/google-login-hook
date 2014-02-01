@@ -97,6 +97,13 @@ public class AddGoogleExpandoFieldsAction extends SimpleAction {
 		
 		// Add expando field for storing site-specific google login OAuth json token
 		
+		properties = new UnicodeProperties();
+
+		properties.setProperty("hidden", "true");
+		properties.setProperty("visible-with-update-permission", "false");
+		properties.setProperty("height", "105");
+		properties.setProperty("width", "450");
+		
 		expandoTable = null;
 		
 		try {
@@ -110,10 +117,11 @@ public class AddGoogleExpandoFieldsAction extends SimpleAction {
 		}
 		
 		addColumn(
-				expandoTable.getTableId(), GoogleOAuth.GOOGLE_LOGIN_JSON_CODE,
-				properties);
-		
-		
+			expandoTable.getTableId(), GoogleOAuth.GOOGLE_SITE_CLIENT_ID,
+			properties);
+		addColumn(
+			expandoTable.getTableId(), GoogleOAuth.GOOGLE_SITE_CLIENT_SECRET,
+			properties);
 	}
 
 }
