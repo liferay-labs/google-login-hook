@@ -263,7 +263,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 		}
 
 		builder.setAccessType(accessType);
-		builder.setApprovalPrompt("force");
+		builder.setApprovalPrompt("online");
 
 		return builder.build();
 	}
