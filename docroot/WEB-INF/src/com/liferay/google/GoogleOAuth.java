@@ -14,6 +14,21 @@
 
 package com.liferay.google;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Locale;
+
+import javax.portlet.PortletMode;
+import javax.portlet.PortletRequest;
+import javax.portlet.PortletURL;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeRequestUrl;
@@ -25,10 +40,11 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.oauth2.Oauth2;
 import com.google.api.services.oauth2.model.Userinfo;
-
 import com.liferay.portal.kernel.deploy.DeployManagerUtil;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
 import com.liferay.portal.kernel.util.CalendarFactoryUtil;
@@ -44,6 +60,7 @@ import com.liferay.portal.kernel.workflow.WorkflowConstants;
 import com.liferay.portal.model.Contact;
 import com.liferay.portal.model.User;
 import com.liferay.portal.model.UserGroupRole;
+import com.liferay.portal.service.GroupLocalServiceUtil;
 import com.liferay.portal.service.ServiceContext;
 import com.liferay.portal.service.UserLocalServiceUtil;
 import com.liferay.portal.theme.ThemeDisplay;
@@ -52,23 +69,6 @@ import com.liferay.portal.util.PortletKeys;
 import com.liferay.portlet.PortletURLFactoryUtil;
 import com.liferay.portlet.expando.model.ExpandoTableConstants;
 import com.liferay.portlet.expando.service.ExpandoValueLocalServiceUtil;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Locale;
-
-import javax.portlet.PortletMode;
-import javax.portlet.PortletRequest;
-import javax.portlet.PortletURL;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
 /**
  * @author Sergio González
@@ -80,6 +80,10 @@ public class GoogleOAuth extends BaseStrutsAction {
 	public static final String GOOGLE_REFRESH_TOKEN = "googleRefreshToken";
 
 	public static final String GOOGLE_USER_ID = "googleUserId";
+	
+	public static final String GOOGLE_SITE_CLIENT_ID = "googleSiteClientId";
+	
+	public static final String GOOGLE_SITE_CLIENT_SECRET = "googleSiteClientSecret";
 
 	public String execute(
 			HttpServletRequest request, HttpServletResponse response)
@@ -94,7 +98,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 		if (cmd.equals("login")) {
 			GoogleAuthorizationCodeFlow flow = getFlow(
-				themeDisplay.getCompanyId());
+				themeDisplay.getCompanyId(), themeDisplay.getScopeGroupId());
 
 			GoogleAuthorizationCodeRequestUrl
 				googleAuthorizationCodeRequestUrl = flow.newAuthorizationUrl();
@@ -112,7 +116,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 
 			if (Validator.isNotNull(code)) {
 				Credential credential = exchangeCode(
-					themeDisplay.getCompanyId(), code, redirectUri);
+					themeDisplay.getCompanyId(), themeDisplay.getScopeGroupId(), code, redirectUri);
 
 				User user = setGoogleCredentials(
 					session, themeDisplay.getCompanyId(), credential);
@@ -195,11 +199,11 @@ public class GoogleOAuth extends BaseStrutsAction {
 	}
 
 	protected Credential exchangeCode(
-			long companyId, String authorizationCode, String redirectUri)
-		throws CodeExchangeException, SystemException {
+			long companyId, long scopeGroupId, String authorizationCode, String redirectUri)
+		throws SystemException, PortalException {
 
 		try {
-			GoogleAuthorizationCodeFlow flow = getFlow(companyId);
+			GoogleAuthorizationCodeFlow flow = getFlow(companyId, scopeGroupId);
 
 			GoogleAuthorizationCodeTokenRequest token = flow.newTokenRequest(
 				authorizationCode);
@@ -217,19 +221,14 @@ public class GoogleOAuth extends BaseStrutsAction {
 		}
 	}
 
-	protected GoogleAuthorizationCodeFlow getFlow(long companyId)
-		throws IOException, SystemException {
+	protected GoogleAuthorizationCodeFlow getFlow(long companyId, long scopeGroupId)
+		throws IOException, SystemException, PortalException {
 
 		HttpTransport httpTransport = new NetHttpTransport();
 		JacksonFactory jsonFactory = new JacksonFactory();
 
 		GoogleAuthorizationCodeFlow.Builder builder = null;
-
-		String googleClientId = PrefsPropsUtil.getString(
-			companyId, "google.client.id");
-		String googleClientSecret = PrefsPropsUtil.getString(
-			companyId, "google.client.secret");
-
+		
 		List<String> scopes = null;
 
 		if (DeployManagerUtil.isDeployed(_GOOGLE_DRIVE_CONTEXT)) {
@@ -239,8 +238,35 @@ public class GoogleOAuth extends BaseStrutsAction {
 			scopes = _SCOPES_LOGIN;
 		}
 
+		// Try to get Google Client ID and Client Secret for current Site settings
+		
+		String googleClientId = (String)GroupLocalServiceUtil.getGroup(scopeGroupId)
+				.getExpandoBridge().getAttribute(GOOGLE_SITE_CLIENT_ID, false);
+		String googleClientSecret = (String)GroupLocalServiceUtil.getGroup(scopeGroupId)
+				.getExpandoBridge().getAttribute(GOOGLE_SITE_CLIENT_SECRET, false);
+		
+		// If they are not set, then try to get it from Portal settings
+		
 		if (Validator.isNull(googleClientId) ||
 			Validator.isNull(googleClientSecret)) {
+			
+			_log.debug("Client ID and Client Secret was not set for Site, "
+					+ "getting from Portal Settings");
+			
+			googleClientId = PrefsPropsUtil.getString(
+				companyId, "google.client.id");
+			googleClientSecret = PrefsPropsUtil.getString(
+				companyId, "google.client.secret");
+		}
+
+		// If they are not set both for Site and Portal settings, then
+		// read it from client_secrets.json
+		
+		if (Validator.isNull(googleClientId) ||
+			Validator.isNull(googleClientSecret)) {
+			
+			_log.debug("Client ID and Client Secret was not set for Portal, "
+					+ "reading JSON code from plugin resources");
 
 			InputStream is = GoogleOAuth.class.getResourceAsStream(
 				_CLIENT_SECRETS_LOCATION);
@@ -264,7 +290,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 		}
 
 		builder.setAccessType(accessType);
-		builder.setApprovalPrompt("force");
+		builder.setApprovalPrompt("auto");
 
 		return builder.build();
 	}
@@ -492,5 +518,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 	private static final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
+	
+	private static Log _log = LogFactoryUtil.getLog(GoogleOAuth.class);
 
 }
