@@ -43,6 +43,8 @@ import com.google.api.services.oauth2.model.Userinfo;
 import com.liferay.portal.kernel.deploy.DeployManagerUtil;
 import com.liferay.portal.kernel.exception.PortalException;
 import com.liferay.portal.kernel.exception.SystemException;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
 import com.liferay.portal.kernel.portlet.LiferayWindowState;
 import com.liferay.portal.kernel.struts.BaseStrutsAction;
 import com.liferay.portal.kernel.util.CalendarFactoryUtil;
@@ -248,6 +250,9 @@ public class GoogleOAuth extends BaseStrutsAction {
 		if (Validator.isNull(googleClientId) ||
 			Validator.isNull(googleClientSecret)) {
 			
+			_log.debug("Client ID and Client Secret was not set for Site, "
+					+ "getting from Portal Settings");
+			
 			googleClientId = PrefsPropsUtil.getString(
 				companyId, "google.client.id");
 			googleClientSecret = PrefsPropsUtil.getString(
@@ -259,6 +264,9 @@ public class GoogleOAuth extends BaseStrutsAction {
 		
 		if (Validator.isNull(googleClientId) ||
 			Validator.isNull(googleClientSecret)) {
+			
+			_log.debug("Client ID and Client Secret was not set for Portal, "
+					+ "reading JSON code from plugin resources");
 
 			InputStream is = GoogleOAuth.class.getResourceAsStream(
 				_CLIENT_SECRETS_LOCATION);
@@ -510,5 +518,7 @@ public class GoogleOAuth extends BaseStrutsAction {
 	private static final List<String> _SCOPES_LOGIN = Arrays.asList(
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile");
+	
+	private static Log _log = LogFactoryUtil.getLog(GoogleOAuth.class);
 
 }
