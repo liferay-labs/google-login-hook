@@ -22,9 +22,12 @@
 <h3><liferay-ui:message key="google-login-settings" /></h3>
 
 <%
-	/* String googleLoginJSONCode = PrefsPropsUtil.getString(company.getCompanyId(), "googleLoginJsonCode"); */
 	Group liveGroup = (Group)request.getAttribute("site.liveGroup");
 %>
+
+<div class="alert alert-info">
+		<liferay-ui:message key="set-login-credentials-for-current-site-or-go-to-portal-settings" />
+	</div>
 
 <liferay-ui:custom-attribute
 	className="<%= Group.class.getName() %>"
